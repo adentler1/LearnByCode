@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Delta Method</title>
+<script>
+MathJax = {
+  tex: {
+    inlineMath: [['$', '$']],
+    displayMath: [['$$', '$$']],
+    tags: 'ams'
+  }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" async></script>
+<style>
+:root {
+  --bg: #fdfdfd;
+  --fg: #222;
+  --accent: #1a5276;
+  --border: #ccc;
+  --box-bg: #f4f8fb;
+  --code-bg: #f0f0f0;
+  --max-w: 44em;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: 'Latin Modern Roman', 'Computer Modern', 'Georgia', serif;
+  color: var(--fg);
+  background: var(--bg);
+  line-height: 1.65;
+  padding: 2em 1.5em;
+  max-width: var(--max-w);
+  margin: 0 auto;
+}
+h1 {
+  font-size: 1.9em;
+  margin-bottom: 0.15em;
+  color: var(--accent);
+  border-bottom: 2px solid var(--accent);
+  padding-bottom: 0.2em;
+}
+h2 {
+  font-size: 1.35em;
+  margin-top: 2em;
+  margin-bottom: 0.6em;
+  color: var(--accent);
+}
+h3 {
+  font-size: 1.1em;
+  margin-top: 1.4em;
+  margin-bottom: 0.4em;
+}
+p { margin-bottom: 0.9em; }
+.subtitle {
+  font-size: 0.95em;
+  color: #555;
+  margin-bottom: 2em;
+}
+.theorem, .lemma, .remark, .definition {
+  background: var(--box-bg);
+  border-left: 3.5px solid var(--accent);
+  padding: 0.9em 1.1em;
+  margin: 1.2em 0;
+  border-radius: 0 4px 4px 0;
+}
+.theorem .label, .lemma .label, .remark .label, .definition .label {
+  font-weight: bold;
+  color: var(--accent);
+  margin-bottom: 0.3em;
+  display: block;
+}
+.remark {
+  border-left-color: #7d8c97;
+  background: #f7f7f7;
+}
+.remark .label { color: #555; }
+.proof {
+  margin: 0.8em 0 1.2em 0;
+  padding-left: 1em;
+  border-left: 2px solid #ddd;
+}
+.proof .label {
+  font-style: italic;
+  color: #555;
+}
+.qed {
+  float: right;
+  font-size: 0.9em;
+}
+code {
+  font-family: 'Fira Code', 'Consolas', 'Monaco', monospace;
+  font-size: 0.88em;
+  background: var(--code-bg);
+  padding: 0.15em 0.4em;
+  border-radius: 3px;
+}
+pre {
+  background: var(--code-bg);
+  padding: 1em;
+  border-radius: 4px;
+  overflow-x: auto;
+  margin: 1em 0;
+  font-size: 0.88em;
+  line-height: 1.5;
+}
+pre code {
+  background: none;
+  padding: 0;
+}
+table {
+  border-collapse: collapse;
+  margin: 1em 0;
+  width: 100%;
+  font-size: 0.93em;
+}
+th, td {
+  border: 1px solid var(--border);
+  padding: 0.45em 0.7em;
+  text-align: left;
+}
+th { background: var(--box-bg); font-weight: 600; }
+ul, ol { margin: 0.5em 0 1em 1.5em; }
+li { margin-bottom: 0.3em; }
+.references {
+  font-size: 0.92em;
+  margin-top: 2em;
+  padding-top: 1em;
+  border-top: 1px solid var(--border);
+}
+.references li { margin-bottom: 0.5em; }
+.assumption-list li {
+  margin-bottom: 0.6em;
+}
+a { color: var(--accent); }
+footer {
+  margin-top: 3em;
+  padding-top: 1em;
+  border-top: 1px solid var(--border);
+  font-size: 0.85em;
+  color: #888;
+}
+</style>
+</head>
+<body>
+
+<h1>The Delta Method</h1>
+<p class="subtitle">
+  Variance estimation for transformations of estimated parameters<br>
+  Part of <a href="https://github.com/YOUR_USERNAME/LearnByCode">LearnByCode</a> &mdash; MATLAB toolboxes for econometric methods
+</p>
+
+<!-- ============================================================ -->
+<h2>1. Why the Delta Method?</h2>
+
+<p>
+  You estimated a regression and obtained coefficient estimates
+  $\hat\beta_1, \hat\beta_2, \ldots$ with their covariance matrix.
+  Now someone asks: <em>what is the standard error of $\hat\beta_1 / \hat\beta_2$?</em>
+</p>
+
+<p>
+  You cannot simply divide the standard errors&mdash;the ratio of two
+  normal random variables is not normal, and the covariance between
+  numerator and denominator matters. The <strong>delta method</strong> solves this:
+  it gives you the asymptotic variance of <em>any</em> smooth function of your
+  estimates, using only quantities you already have.
+</p>
+
+<p><strong>When do you need it?</strong>
+  Whenever you need the standard error of a quantity that is a function
+  of estimated coefficients:</p>
+
+<ol>
+  <li><strong>Ratio of coefficients</strong>&mdash;e.g., the relative effect of education vs. experience on wages</li>
+  <li><strong>Elasticities</strong> from a log-linear model&mdash;e.g., price elasticity $= \hat\beta_{\text{price}} \cdot \bar p / \bar q$</li>
+  <li><strong>Marginal effects</strong> in nonlinear models&mdash;e.g., probit/logit: $\hat\beta \cdot \phi(X'\hat\beta)$</li>
+  <li><strong>Long-run multipliers</strong> in dynamic models&mdash;e.g., sum of lag coefficients / $(1 - \hat\rho)$</li>
+  <li><strong>Structural parameters</strong> from reduced-form estimates&mdash;e.g., in IV/SEM models</li>
+  <li><strong>Predicted values</strong> at a specific point&mdash;e.g., predicted wage at education${}=16$, experience${}=5$</li>
+  <li><strong>Testing linear restrictions</strong>&mdash;e.g., $H_0\colon \beta_1 = \beta_2$, which is $R\beta - r = 0$ with $R = (1,\;{-1})$, $r = 0$</li>
+</ol>
+
+<p>
+  All of these are functions $g(\hat\theta)$ of the coefficient vector.
+  The delta method tells you:
+  <em>if you know the variance of $\hat\theta$, you can get the variance of
+  $g(\hat\theta)$ by sandwiching with the Jacobian.</em>
+</p>
+
+<h3>A concrete example</h3>
+
+<p>
+  Suppose OLS gives $\hat\beta = (3.05,\; 0.98)'$ with covariance matrix
+</p>
+$$
+  \widehat{V} = \begin{pmatrix} 0.0042 & -0.0001 \\ -0.0001 & 0.0038 \end{pmatrix}.
+$$
+<p>You want the standard error of the ratio $g(\beta) = \beta_1 / \beta_2$.</p>
+
+<ol>
+  <li><strong>Point estimate:</strong> $\hat\phi = 3.05 / 0.98 = 3.112$</li>
+  <li><strong>Jacobian:</strong> $G = \bigl(1/\beta_2,\; -\beta_1/\beta_2^2\bigr)\big|_{\hat\beta} = (1.020,\; -3.178)$</li>
+  <li><strong>Variance:</strong> $\widehat{\operatorname{Var}}(\hat\phi) = G\, \widehat{V}\, G' = 0.0427$</li>
+  <li><strong>Standard error:</strong> $\operatorname{se}(\hat\phi) = \sqrt{0.0427} = 0.207$</li>
+</ol>
+
+<p>That is all the delta method does&mdash;three lines of computation once you have the Jacobian.</p>
+
+<!-- ============================================================ -->
+<h2>2. The Result</h2>
+
+<div class="theorem">
+  <span class="label">Theorem (Delta Method) &mdash; Hansen (2021), Thm&nbsp;6.8; Robinson (2008), Lemma&nbsp;1.</span>
+  Let $\mu \in \mathbb{R}^k$ and $g \colon \mathbb{R}^k \to \mathbb{R}^q$.
+  If $\sqrt{n}(\hat\mu - \mu) \xrightarrow{d} \xi$, where $g$ is continuously differentiable
+  in a neighborhood of $\mu$, then
+  $$
+    \sqrt{n}\bigl(g(\hat\mu) - g(\mu)\bigr) \xrightarrow{d} G\,\xi,
+  $$
+  where $G = \dfrac{\partial}{\partial u'} g(u)\Big|_{u=\mu}$ is the $q \times k$
+  <strong>Jacobian matrix</strong>. In particular, if $\xi \sim \mathcal{N}(0, V)$, then
+  \begin{equation}
+    \sqrt{n}\bigl(g(\hat\mu) - g(\mu)\bigr) \xrightarrow{d} \mathcal{N}\bigl(0,\; G\, V\, G'\bigr). \label{eq:delta}
+  \end{equation}
+</div>
+
+<p><strong>Dimensions:</strong></p>
+<table>
+  <tr><th>Object</th><th>Size</th><th>Description</th></tr>
+  <tr><td>$\theta_0,\;\hat\theta$</td><td>$k \times 1$</td><td>Parameter vector and its estimator</td></tr>
+  <tr><td>$V$</td><td>$k \times k$</td><td>Asymptotic covariance of $\sqrt{n}(\hat\theta - \theta_0)$</td></tr>
+  <tr><td>$g(\cdot)$</td><td>$\mathbb{R}^k \to \mathbb{R}^q$</td><td>Transformation of interest</td></tr>
+  <tr><td>$G = \partial g / \partial \theta'$</td><td>$q \times k$</td><td>Jacobian evaluated at $\theta_0$</td></tr>
+  <tr><td>$G V G'$</td><td>$q \times q$</td><td>Asymptotic covariance of $\sqrt{n}(g(\hat\theta) - g(\theta_0))$</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2>3. Proof Sketch</h2>
+
+<div class="proof">
+  <span class="label">Proof (Robinson 2008, Section 5.2.1).</span>
+  <p>By the mean value theorem,</p>
+  $$
+    g(\hat\theta) - g(\theta_0)
+    = F\!\bigl(\tilde\theta\bigr)\,\bigl(\hat\theta - \theta_0\bigr),
+  $$
+  <p>
+    where $\tilde\theta$ lies between $\hat\theta$ and $\theta_0$,
+    and $F(\theta) = \partial g(\theta)/\partial\theta'$ is the Jacobian.
+    Since $\hat\theta$ is consistent, $\tilde\theta \xrightarrow{p} \theta_0$,
+    and by continuity of $F$:
+  </p>
+  $$
+    F\!\bigl(\tilde\theta\bigr) \xrightarrow{p} F(\theta_0).
+  $$
+  <p>By Slutsky's theorem,</p>
+  $$
+    \sqrt{n}\bigl(g(\hat\theta) - g(\theta_0)\bigr)
+    = F(\theta_0)\,\sqrt{n}\bigl(\hat\theta - \theta_0\bigr) + o_p(1).
+  $$
+  <p>
+    The result follows by an application of Cram&eacute;r's theorem.
+    <span class="qed">$\square$</span>
+  </p>
+</div>
+
+<!-- ============================================================ -->
+<h2>4. Two Special Cases</h2>
+
+<h3>4.1 Linear transformation: $\phi = R\theta - r$</h3>
+
+<p>
+  When $g(\theta) = R\theta - r$ with $R$ a $q \times k$ matrix and $r$ a $q \times 1$ vector,
+  the Jacobian is simply $G = R$ (constant). Therefore:
+</p>
+$$
+  \operatorname{Var}(\hat\phi) = R\, V\, R'.
+$$
+<p>
+  This is <strong>exact</strong> &mdash; no first-order approximation is involved.
+</p>
+
+<p>Common uses in econometrics:</p>
+<ul>
+  <li>Testing equality of coefficients: $R = \begin{pmatrix} 1 & -1 \end{pmatrix}$, $r = 0$</li>
+  <li>Constant-returns-to-scale: $R = \begin{pmatrix} 1 & 1 \end{pmatrix}$, $r = 1$</li>
+  <li>Exclusion restrictions: $R = \begin{pmatrix} 0 & I \end{pmatrix}$, $r = 0$</li>
+</ul>
+
+<p>See Hansen (2021), Chapter&nbsp;8.1 for the connection to constrained least squares.</p>
+
+<h3>4.2 Nonlinear transformation: $\phi = g(\theta)$</h3>
+
+<p>
+  The Jacobian $G = \partial g/\partial\theta'$ must be evaluated &mdash;
+  analytically or numerically. The variance formula
+</p>
+$$
+  \operatorname{Var}(\hat\phi) \approx G\, V\, G'
+$$
+<p>
+  is a <strong>first-order approximation</strong>. Its quality depends on:
+</p>
+<ul>
+  <li>Sample size (how close $\hat\theta$ is to $\theta_0$)</li>
+  <li>Curvature of $g$ (higher-order terms in the Taylor expansion)</li>
+  <li>Whether $G$ has full rank at $\theta_0$</li>
+</ul>
+
+<!-- ============================================================ -->
+<h2>5. Where Does $V$ Come From? The Smooth Function Model</h2>
+
+<p>
+  The delta method theorem starts with "given that you know $V$&hellip;"
+  But where does $V$ actually come from? In practice, most estimators are
+  <strong>plug-in estimators</strong>: you replace population moments with sample
+  moments and then apply some formula.
+</p>
+
+<p>
+  The <em>smooth function model</em> (Hansen 2021, Section&nbsp;6.6) formalizes this.
+  The parameter of interest is
+</p>
+$$
+  \theta = g(\mu), \qquad \mu = \mathbb{E}[h(Y)],
+$$
+<p>
+  where $\hat\mu = n^{-1}\sum_{i=1}^n h(Y_i)$ is the sample analogue.
+  The plug-in estimator $\hat\theta = g(\hat\mu)$ just substitutes $\hat\mu$ for $\mu$.
+</p>
+
+<div class="theorem">
+  <span class="label">Theorem (Smooth Function Model) &mdash; Hansen (2021), Thm&nbsp;6.10.</span>
+  If $Y_i \in \mathbb{R}^m$ are i.i.d., $h \colon \mathbb{R}^m \to \mathbb{R}^k$,
+  $\mathbb{E}\|h(Y)\|^2 < \infty$, and $G(u) = \frac{\partial}{\partial u'} g(u)$
+  is continuous in a neighborhood of $\mu$, then
+  $$
+    \sqrt{n}\bigl(\hat\theta - \theta\bigr)
+    \xrightarrow{d} \mathcal{N}\bigl(0,\; G\, V\, G'\bigr),
+  $$
+  where $V = \mathbb{E}\bigl[(h(Y)-\mu)(h(Y)-\mu)'\bigr]$ is $k \times k$
+  and $G = G(\mu)$ is $q \times k$.
+</div>
+
+<p>
+  <strong>Why this matters:</strong> the smooth function model tells you that the delta
+  method applies automatically to any plug-in estimator. OLS is a special case:
+  $\mu = \bigl(\mathbb{E}[X'X],\;\mathbb{E}[X'Y]\bigr)$, and $g$ extracts
+  $\beta = \mathbb{E}[X'X]^{-1}\mathbb{E}[X'Y]$. So when you compute the OLS
+  covariance matrix, you are already using the smooth function model&mdash;the
+  delta method is the same idea applied one more time on top.
+</p>
+
+<!-- ============================================================ -->
+<h2>6. Singularity: The Collinearity of Transformations</h2>
+
+<p>
+  In OLS, <strong>collinearity</strong> means that your regressors are linearly
+  dependent: $X'X$ is singular and you cannot invert it. The delta method has
+  an exact analogue: if your <em>parameters of interest</em> are linearly dependent
+  functions of the <em>estimated coefficients</em>, then $G\, V\, G'$ is singular
+  and you cannot get independent standard errors for all of them.
+</p>
+
+<div class="remark">
+  <span class="label">Remark (Robinson 2008, Remark&nbsp;13).</span>
+  If the parameters of interest $\phi$ are functions of fewer estimated
+  coefficients $\theta$ than there are functions (i.e., $q > k$, or more
+  generally the rows of $G$ are linearly dependent), then $G\, V\, G'$
+  is <strong>singular</strong>.
+</div>
+
+<p>
+  <em>Example.</em> You estimated two coefficients $\hat\theta_1, \hat\theta_2$,
+  but you report three quantities of interest:
+</p>
+$$
+  \phi_1 = \theta_1 + \theta_2, \qquad
+  \phi_2 = \theta_1 - \theta_2, \qquad
+  \phi_3 = 2\theta_1 + 3\theta_2.
+$$
+<p>
+  Here $\phi_3 = \frac{1}{2}(3\phi_1 + \phi_2)$&mdash;a linear combination of
+  the other two. The $3 \times 3$ covariance matrix of
+  $(\hat\phi_1, \hat\phi_2, \hat\phi_3)$ has rank at most 2, just as adding
+  a collinear regressor to an OLS model makes $X'X$ singular. The remedy is
+  the same: drop the redundant quantity, or recognize that you have only two
+  independent parameters.
+</p>
+
+<!-- ============================================================ -->
+<h2>7. Implementation</h2>
+
+<p>
+  The implementation in <code>DeltaMethod.m</code> performs the
+  finite-sample analogue of $\eqref{eq:delta}$:
+</p>
+
+<pre><code>para    = g(coef);                 % point estimate: g(theta_hat)
+F       = JacobianEst(g, coef);   % numerical Jacobian: G at theta_hat
+varpara = F * varcoef * F';       % sandwich: G * V_hat * G'</code></pre>
+
+<p>
+  <code>JacobianEst.m</code> uses <strong>central finite differences</strong>:
+</p>
+$$
+  \frac{\partial g}{\partial \theta_j}
+  \approx \frac{g(\theta + h\, e_j) - g(\theta - h\, e_j)}{2h},
+$$
+<p>
+  with step size $h = \varepsilon^{1/3} \cdot \max(|\theta_j|,\, 1)$,
+  where $\varepsilon \approx 2.2 \times 10^{-16}$ is machine epsilon.
+  This balances truncation error $O(h^2)$ against roundoff error $O(\varepsilon/h)$.
+</p>
+
+<h3>Self-validation</h3>
+<p>
+  A good test: compare the numerical Jacobian against the analytical one.
+  For $g(\beta) = \beta_1/\beta_2$, the analytical Jacobian is
+  $G = (1/\beta_2,\; -\beta_1/\beta_2^2)$. The numerical and analytical standard
+  errors should agree to $\sim\!10$ digits. See <code>MinimalExample.m</code>
+  for a runnable verification.
+</p>
+
+<!-- ============================================================ -->
+<h2>8. Assumptions</h2>
+
+<ol class="assumption-list">
+  <li>
+    <strong>Asymptotic normality</strong> of the original estimator:
+    $\sqrt{n}(\hat\theta - \theta_0) \xrightarrow{d} \mathcal{N}(0, V)$.
+    Holds for OLS, IV, GMM, MLE under standard regularity conditions.
+  </li>
+  <li>
+    <strong>Continuous differentiability</strong> of $g$ in a neighborhood of $\theta_0$.
+    Excludes functions like $|\theta|$ at $\theta = 0$ or indicator functions.
+  </li>
+  <li>
+    <strong>Consistent covariance estimation</strong>:
+    $\widehat{V}$ is a consistent estimator of $V/n$.
+  </li>
+  <li>
+    <strong>Non-degenerate Jacobian</strong>:
+    $G$ has rank $q$ for the standard errors to be finite
+    (see Section&nbsp;6 for the singular case).
+  </li>
+</ol>
+
+<!-- ============================================================ -->
+<h2>References</h2>
+<ul class="references">
+  <li>
+    Hansen, B.&nbsp;E. (2021).
+    <em>Econometrics.</em> Princeton University Press.
+    Theorem&nbsp;6.8, Sections&nbsp;6.5&ndash;6.6, 7.10&ndash;7.11.
+  </li>
+  <li>
+    Robinson, P.&nbsp;M. (2008).
+    <em>EC484 Econometric Analysis: Lecture Notes.</em> LSE.
+    Section&nbsp;5.2.1, Lemma&nbsp;1, Remark&nbsp;13.
+  </li>
+</ul>
+
+<h3>Online resources</h3>
+<ul class="references">
+  <li>Robinson, T.&nbsp;S. (2024).
+    &ldquo;Delta Method,&rdquo; Chapter&nbsp;7 in <em>10 Fundamental Theorems for Econometrics.</em>
+    <a href="https://bookdown.org/ts_robinson1994/10EconometricTheorems/dm.html">bookdown.org</a>
+  </li>
+  <li>Stata FAQ.
+    &ldquo;Explanation of the Delta Method.&rdquo;
+    <a href="https://www.stata.com/support/faqs/statistics/delta-method/">stata.com</a>
+  </li>
+  <li>Statlect.
+    &ldquo;Delta Method.&rdquo;
+    <a href="https://www.statlect.com/asymptotic-theory/delta-method">statlect.com</a>
+  </li>
+  <li>CRAN / modmarg.
+    &ldquo;What is the Delta Method?&rdquo;
+    <a href="https://cran.r-project.org/web/packages/modmarg/vignettes/delta-method.html">cran.r-project.org</a>
+  </li>
+</ul>
+
+<footer>
+  Generated for the <strong>LearnByCode</strong> project.
+  Source: <code>DeltaMethod/</code> toolbox.
+</footer>
+
+</body>
+</html>
